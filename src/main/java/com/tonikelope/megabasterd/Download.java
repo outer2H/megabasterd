@@ -1080,18 +1080,24 @@ public class Download implements Transference, Runnable, SecureSingleThreadNotif
                 }
 
                 //Resuming single file links and new/resuming folder links
-                try {
+                int insert_attempt = 0;
 
-                    deleteDownload(_url); //If resuming
-
-                    insertDownload(_url, _ma.getFull_email(), _download_path, _file_name, _file_key, _file_size, _file_pass, _file_noexpire, _custom_chunks_dir);
-
-                    _provision_ok = true;
-
-                } catch (SQLException ex) {
-
-                    _status_error = "Error registering download: " + ex.getMessage();
-
+                while (!_provision_ok && insert_attempt < 3) {
+                    try {
+                        deleteDownload(_url);
+                        insertDownload(_url, _ma.getFull_email(), _download_path, _file_name, _file_key, _file_size, _file_pass, _file_noexpire, _custom_chunks_dir);
+                        _provision_ok = true; // Insert successful
+                    } catch (SQLException ex) {
+                        if (ex.getMessage().contains("UNIQUE constraint failed")) {
+                            // Modify the _file_name to make it unique
+                            _file_name = _file_name.replaceFirst("\\..*$", "_" + MiscTools.genID(8) + "_$0");
+                            insert_attempt++;
+                        } else {
+                            // Handle other SQL exceptions
+                            _status_error = "Error registering download: " + ex.getMessage();
+                            break; // Exit the loop for other errors
+                        }
+                    }
                 }
             }
 
